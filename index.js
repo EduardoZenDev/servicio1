@@ -28,10 +28,10 @@ app.get('/', (req, res) => {
 
 // --- CREAR persona con transacción ---
 app.post('/api/personas', (req, res) => {
-  const { folio_ine, nombre, curp, sexo, fecha_nacimiento, direccion, documento } = req.body;
+  const { id, folio_ine, nombre, curp, sexo, fecha_nacimiento, direccion, documento } = req.body;
 
-  if (!folio_ine || !nombre || !curp || !sexo || !fecha_nacimiento || !direccion || !documento) {
-    return res.status(400).json({ error: 'Faltan datos obligatorios' });
+  if (!id || !folio_ine || !nombre || !curp || !sexo || !fecha_nacimiento || !direccion || !documento) {
+    return res.status(400).json({ error: 'Faltan datos obligatorios, incluyendo id' });
   }
 
   connection.beginTransaction(err => {
@@ -39,30 +39,29 @@ app.post('/api/personas', (req, res) => {
       return res.status(500).json({ error: 'Error iniciando transacción' });
     }
 
-    // Insert persona
+    // Insert persona con id manual
     const sqlPersona = `
-      INSERT INTO personas_ine (folio_ine, nombre, curp, sexo, fecha_nacimiento)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO personas_ine (id, folio_ine, nombre, curp, sexo, fecha_nacimiento)
+      VALUES (?, ?, ?, ?, ?, ?)
     `;
 
-    connection.query(sqlPersona, [folio_ine, nombre, curp, sexo, fecha_nacimiento], (err, result) => {
+    connection.query(sqlPersona, [id, folio_ine, nombre, curp, sexo, fecha_nacimiento], (err, result) => {
       if (err) {
         return connection.rollback(() => {
           res.status(500).json({ error: 'Error insertando persona', details: err });
         });
       }
 
-      const personaId = result.insertId;  // <-- Aquí obtienes el ID insertado
-
-      // Insert direccion
+      // Insert direccion con mismo id
       const sqlDireccion = `
-        INSERT INTO direcciones (folio_ine, calle, numero, colonia, municipio, estado, codigo_postal)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO direcciones (id, folio_ine, calle, numero, colonia, municipio, estado, codigo_postal)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       connection.query(
         sqlDireccion,
         [
+          id,
           folio_ine,
           direccion.calle,
           direccion.numero || null,
@@ -78,15 +77,15 @@ app.post('/api/personas', (req, res) => {
             });
           }
 
-          // Insert documento
+          // Insert documento con mismo id
           const sqlDocumento = `
-            INSERT INTO documentos_ine (folio_ine, clave_elector, seccion, vigencia)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO documentos_ine (id, folio_ine, clave_elector, seccion, vigencia)
+            VALUES (?, ?, ?, ?, ?)
           `;
 
           connection.query(
             sqlDocumento,
-            [folio_ine, documento.clave_elector, documento.seccion || null, documento.vigencia],
+            [id, folio_ine, documento.clave_elector, documento.seccion || null, documento.vigencia],
             (err, result) => {
               if (err) {
                 return connection.rollback(() => {
@@ -94,7 +93,6 @@ app.post('/api/personas', (req, res) => {
                 });
               }
 
-              // Commit transaction
               connection.commit(err => {
                 if (err) {
                   return connection.rollback(() => {
@@ -102,11 +100,7 @@ app.post('/api/personas', (req, res) => {
                   });
                 }
 
-                // Enviar id generado
-                res.status(201).json({ 
-                  message: 'Datos insertados correctamente',
-                  personaId: personaId
-                });
+                res.status(201).json({ message: 'Datos insertados correctamente', id });
               });
             }
           );
@@ -115,6 +109,7 @@ app.post('/api/personas', (req, res) => {
     });
   });
 });
+
 
 
 
