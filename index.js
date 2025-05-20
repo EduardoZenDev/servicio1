@@ -28,56 +28,88 @@ app.get('/', (req, res) => {
 
 // --- CREAR persona con transacción ---
 app.post('/api/personas', (req, res) => {
-  const {
-    folio_ine,
-    nombre,
-    curp,
-    sexo,
-    fecha_nacimiento,
-    direccion,
-    documento
-  } = req.body;
+  const { folio_ine, nombre, curp, sexo, fecha_nacimiento, direccion, documento } = req.body;
 
   if (!folio_ine || !nombre || !curp || !sexo || !fecha_nacimiento || !direccion || !documento) {
     return res.status(400).json({ error: 'Faltan datos obligatorios' });
   }
 
   connection.beginTransaction(err => {
-    if (err) return res.status(500).json({ error: 'Error iniciando la transacción' });
+    if (err) {
+      return res.status(500).json({ error: 'Error iniciando transacción' });
+    }
 
-    const sqlPersonas = `INSERT INTO personas_ine (folio_ine, nombre, curp, sexo, fecha_nacimiento) VALUES (?, ?, ?, ?, ?)`;
-    connection.query(sqlPersonas, [folio_ine, nombre, curp, sexo, fecha_nacimiento], (err) => {
+    // Insert persona
+    const sqlPersona = `
+      INSERT INTO personas_ine (folio_ine, nombre, curp, sexo, fecha_nacimiento)
+      VALUES (?, ?, ?, ?, ?)
+    `;
+
+    connection.query(sqlPersona, [folio_ine, nombre, curp, sexo, fecha_nacimiento], (err, result) => {
       if (err) {
-        return connection.rollback(() => res.status(500).json({ error: 'Error insertando en personas_ine' }));
+        return connection.rollback(() => {
+          res.status(500).json({ error: 'Error insertando persona', details: err });
+        });
       }
 
-      const sqlDirecciones = `INSERT INTO direcciones (folio_ine, calle, numero, colonia, municipio, estado, codigo_postal) VALUES (?, ?, ?, ?, ?, ?, ?)`;
-      const { calle, numero, colonia, municipio, estado, codigo_postal } = direccion;
+      // Insert direccion
+      const sqlDireccion = `
+        INSERT INTO direcciones (folio_ine, calle, numero, colonia, municipio, estado, codigo_postal)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `;
 
-      connection.query(sqlDirecciones, [folio_ine, calle, numero, colonia, municipio, estado, codigo_postal], (err) => {
-        if (err) {
-          return connection.rollback(() => res.status(500).json({ error: 'Error insertando en direcciones' }));
-        }
-
-        const sqlDocumentos = `INSERT INTO documentos_ine (folio_ine, clave_elector, seccion, vigencia) VALUES (?, ?, ?, ?)`;
-        const { clave_elector, seccion, vigencia } = documento;
-
-        connection.query(sqlDocumentos, [folio_ine, clave_elector, seccion, vigencia], (err) => {
+      connection.query(
+        sqlDireccion,
+        [
+          folio_ine,
+          direccion.calle,
+          direccion.numero || null,
+          direccion.colonia || null,
+          direccion.municipio || null,
+          direccion.estado || null,
+          direccion.codigo_postal || null
+        ],
+        (err, result) => {
           if (err) {
-            return connection.rollback(() => res.status(500).json({ error: 'Error insertando en documentos_ine' }));
+            return connection.rollback(() => {
+              res.status(500).json({ error: 'Error insertando dirección', details: err });
+            });
           }
 
-          connection.commit(err => {
-            if (err) {
-              return connection.rollback(() => res.status(500).json({ error: 'Error haciendo commit' }));
+          // Insert documento
+          const sqlDocumento = `
+            INSERT INTO documentos_ine (folio_ine, clave_elector, seccion, vigencia)
+            VALUES (?, ?, ?, ?)
+          `;
+
+          connection.query(
+            sqlDocumento,
+            [folio_ine, documento.clave_elector, documento.seccion || null, documento.vigencia],
+            (err, result) => {
+              if (err) {
+                return connection.rollback(() => {
+                  res.status(500).json({ error: 'Error insertando documento', details: err });
+                });
+              }
+
+              // Commit transaction
+              connection.commit(err => {
+                if (err) {
+                  return connection.rollback(() => {
+                    res.status(500).json({ error: 'Error confirmando transacción', details: err });
+                  });
+                }
+
+                res.status(201).json({ message: 'Datos insertados correctamente' });
+              });
             }
-            res.status(201).json({ mensaje: 'Datos insertados correctamente' });
-          });
-        });
-      });
+          );
+        }
+      );
     });
   });
 });
+
 
 // --- CONSULTAR todos ---
 app.get('/api/personas', (req, res) => {
