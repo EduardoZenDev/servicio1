@@ -52,6 +52,8 @@ app.post('/api/personas', (req, res) => {
         });
       }
 
+      const personaId = result.insertId;  // <-- Aquí obtienes el ID insertado
+
       // Insert direccion
       const sqlDireccion = `
         INSERT INTO direcciones (folio_ine, calle, numero, colonia, municipio, estado, codigo_postal)
@@ -100,7 +102,11 @@ app.post('/api/personas', (req, res) => {
                   });
                 }
 
-                res.status(201).json({ message: 'Datos insertados correctamente' });
+                // Enviar id generado
+                res.status(201).json({ 
+                  message: 'Datos insertados correctamente',
+                  personaId: personaId
+                });
               });
             }
           );
@@ -109,6 +115,7 @@ app.post('/api/personas', (req, res) => {
     });
   });
 });
+
 
 
 // --- CONSULTAR todos ---
